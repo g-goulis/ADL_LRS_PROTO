@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% load jsonify %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ STATIC_URL }}css/extra.css">
+<style>
+    pre {
+        white-space: pre-wrap;       /* CSS 3 */
+        white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+        white-space: -pre-wrap;      /* Opera 4-6 */
+        white-space: -o-pre-wrap;    /* Opera 7 */
+        word-wrap: break-word;       /* Internet Explorer 5.5+ */
+    }
+    .string { 
+        color: green; 
+    }
+    .number { 
+        color: blue; 
+    }
+    .boolean { 
+        color: purple; 
+    }
+    .null {
+     color: red; 
+    }
+    .key {
+     color: black; 
+    }
+</style>
+{% endblock extra_css %}
+{% block title %}{{user.username}}'s Statements{% endblock title %}
+{% block heading %}{{user.username}}'s Statements{% endblock heading %}
+{% block content %}
+<br>
+<br>
+<div class="content">
+    <div class="pure-g">
+        <div class="pure-u-1-6 pure-u-md-1-6 pure-u-lg-1-6"></div>
+        <div class="pure-u-2-3 pure-u-md-2-3 pure-u-lg-2-3">
+            <div id="allstatements" class="content">
+                    <h1>Filters</h1>
+                    <h2>Agent Name</h2>
+                    <select id="agent_selector">
+                        <option value="" selected></option>
+                        {% for agent in agents %}
+                            <option id="{{ agent.id }}" value="{{ agent.id }}">{{ agent.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <h2>Verb</h2>
+                    <select id="verb_selector">
+                        <option value="" selected></option>
+                        {% for verb in verbs %}
+                            <option id="{{ verb.id }}" value="{{ verb.id }}">{{ verb.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <h2>Activity</h2>
+                    <select id="activity_selector">
+                        <option value="" selected></option>
+                        {% for activity in activities %}
+                            <option id="{{ activity.id }}" value="{{ activity.id }}">{{ activity.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <h2>Date Range</h2>
+                    <label for="start_dt">Start</label>
+                    <input type="datetime-local" id="start_dt"
+                       name="start_dt" value=''
+                       min="2023-01-01T00:00" max="">
+                    <label for="end_dt">End</label>
+                    <input type="datetime-local" id="end_dt"
+                       name="end_dt" value=''
+                       min="2023-01-01T00:00" max="">
+
+                    <button onclick="updateTable()">Filter Statements</button>
+                    <button onclick="clearFilters()">Clear Filters</button>
+                <br>
+                <br>
+
+                <h2>All Statements</h2>
+
+                <table id="example" class="display" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Activity</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+
+            {% include "graph_base.html" %}
+            </div>
+        </div>
+        <div class="pure-u-1-6 pure-u-md-1-6 pure-u-lg-1-6"></div>
+    </div>
+</div>        
+{% endblock content %}
+{% block extra_js %}
+
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+
+<script>
+    function updateTable(){
+        table1.ajax.url(
+          "/me/search_statements?"
+            + new URLSearchParams(getFilters())
+       ).load();
+    }
+
+    function fetchTableData(filters) {
+        console.log("FETCHING!")
+        // Get the CSRF token from the form and include it in the request headers
+        let headers = {
+          'Content-Type': 'application/json'
+        };
+
+        fetch('/me/search_statements?' + new URLSearchParams(filters), {
+          method: 'GET',
+          headers: headers
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Update the data on the page without refreshing
+            console.log('Data received:', data);
+            buildTable(data.data)
+        })
+        .catch(error => {
+          console.error('Error fetching data:', error);
+        });
+    }
+
+    $(document).ready(function() {
+        fetchTableData({});
+    });
+
+    let table1
+    let filters = {}
+    function buildTable() {
+        table1 = $('#example').DataTable({
+            'ajax': {
+                "url": "/me/search_statements?",
+                "type": "GET"
+            },
+            'columns': [
+                { data: 'actor_name', "bSortable": true  },
+                { data: 'action_name' , "bSortable": true },
+                { data: 'activity_name' , "bSortable": true },
+                { data: 'timestamp' , "bSortable": true },
+            ]
+        });
+
+    }
+
+  // Initial data load on page load (you can use default filters if needed)
+
+   // Function to get the CSRF token from the cookies
+    function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        let cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+        }
+    }
+    return cookieValue;
+    }
+
+
+    function getFilters() {
+        let filters = {}
+        if(document.getElementById('agent_selector').value !== '') filters.actor_id = document.getElementById('agent_selector').value
+        if(document.getElementById('verb_selector').value !== '') filters.verb_id = document.getElementById('verb_selector').value
+        if(document.getElementById('activity_selector').value !== '') filters.activity_id = document.getElementById('activity_selector').value
+        if(document.getElementById('start_dt').value !== '') filters.start_dt = document.getElementById('start_dt').value
+        if(document.getElementById('end_dt').value !== '') filters.end_dt = document.getElementById('end_dt').value
+
+        console.log("FILTERS", filters)
+        return filters
+    }
+
+    function clearFilters() {
+        document.getElementById('agent_selector').value = -1
+        document.getElementById('verb_selector').value = -1
+        document.getElementById('activity_selector').value = -1
+
+        table1.ajax.url("/me/search_statements").load();
+    }
+</script>
+<script type="text/javascript" src="{{ STATIC_URL }}scripts/extra-data.js"></script>
+{% endblock extra_js %}

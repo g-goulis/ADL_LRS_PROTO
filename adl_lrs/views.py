@@ -1,6 +1,8 @@
+from datetime import datetime
 import json, requests
 import urllib.request, urllib.parse, urllib.error
 
+# import generics as generics
 from django.contrib.auth import logout, login, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -27,6 +29,9 @@ from lrs.utils.authorization import non_xapi_auth
 
 from oauth_provider.consts import ACCEPTED, CONSUMER_STATES
 from oauth_provider.models import Consumer, Token
+
+# from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import F
 
 from django.conf import settings
 
@@ -216,6 +221,94 @@ def my_statements(request, template="my_statements.html"):
 
     context = {'statements': stmts}
     return render(request, template, context)
+
+@login_required()
+@require_http_methods(["POST", "GET"])
+def all_statements(request, template="all_statements.html"):
+    if request.method == 'GET':
+        stmt_list = Statement.objects.order_by('-timestamp')
+        agent_list = Agent.objects.all()
+        verb_list = Verb.objects.values('id', name=F('canonical_data__display__en-US'))
+        activity_list = Activity.objects.values('id', name=F('canonical_data__definition__name__en-US'))
+        paginator = Paginator(stmt_list, 25)
+        page = request.GET.get('page')
+
+        try:
+            stmts = paginator.page(page)
+        except PageNotAnInteger:
+            stmts = paginator.page(1)
+        except EmptyPage:
+            stmts = paginator.page(paginator.num_pages)
+
+        context = {'statements': stmts, 'agents': agent_list, 'activities': activity_list, 'verbs': verb_list}
+        return render(request, template, context)
+
+    elif request.method == 'POST':
+        agent_list = Agent.objects.filter(name__exact="Test12").all()
+        stmt_list = Statement.objects.order_by('-timestamp')
+        paginator = Paginator(stmt_list, 25)
+        page = request.GET.get('page')
+
+        try:
+            stmts = paginator.page(page)
+        except PageNotAnInteger:
+            stmts = paginator.page(1)
+        except EmptyPage:
+            stmts = paginator.page(paginator.num_pages)
+
+        context = {'statements': stmts, 'agents': agent_list}
+        return render(request, template, context)
+
+
+@require_http_methods(["GET"])
+def search_statements(request):
+    queryset = Statement.objects.all()
+    if request.GET.get('activity_id'):
+        queryset = queryset.filter(object_activity_id=request.GET.get('activity_id'))
+
+    if request.GET.get('verb_id'):
+        queryset = queryset.filter(verb_id=request.GET.get('verb_id'))
+
+    if request.GET.get('actor_id'):
+        queryset = queryset.filter(actor_id=request.GET.get('actor_id'))
+
+    if request.GET.get('start_dt') and request.GET.get('end_dt'):
+        start_dt = datetime.fromisoformat(request.GET.get('start_dt'))
+        end_dt = datetime.fromisoformat(request.GET.get('end_dt'))
+
+        queryset = queryset.filter(stored__range=[start_dt, end_dt])
+
+    # Serialize the queryset into a list of dictionaries
+    data = list(queryset.values('timestamp', 'full_statement',actor_name=F('full_statement__actor__name'), action_name=F('full_statement__verb__display__en-US'), activity_name=F('full_statement__object__definition__name__en-US')))
+
+    # Return the data as a JSON response
+    return JsonResponse({'data': data})
+
+@require_http_methods(["GET"])
+def get_graph_data(request):
+    if request.GET.get('type') == 'duration':
+        return
+
+    elif request.GET.get('type') == 'rightwrong':
+        activity = Activity.objects.get(id=2)
+        response_data = list(Statement.objects.filter(verb_id=2).values(result=F('full_statement__result')))
+
+        keyVals = {}
+        correct_response = activity.canonical_data['definition']['correctResponsesPattern'][0]
+
+        for choice in activity.canonical_data['definition']['choices']:
+            keyVals[choice['id']] = {'selections': 0, 'correct': 'false'}
+
+        for response in response_data:
+            if response['result']['response'] in keyVals:
+                keyVals[response['result']['response']]['selections'] = keyVals[response['result']['response']]['selections'] + 1
+
+        keyVals[correct_response]['correct'] = 'true'
+
+        return JsonResponse({'data': keyVals})
+
+    elif request.GET.get('type') == 'completion':
+        return 30
 
 
 @login_required()
@@ -443,3 +536,7 @@ def hooks(request):
         hooks = Hook.objects.filter(user=user)
         resp_data = [h.to_dict() for h in hooks]
         return HttpResponse(json.dumps(resp_data), content_type="application/json", status=200)
+
+# class UserListView(generics.ListAPIView):
+#     ...
+#     filter_backends = [DjangoFilterBackend]

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<button onclick="fetchGraphData({'type': 'rightwrong'})">Build Graph</button>
+    <div>
+      <canvas id="myChart"></canvas>
+    </div>
+</body>
+</html>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  const ctx = document.getElementById('myChart');
+
+  function fetchGraphData(filters) {
+        console.log("FETCHING!")
+        // Get the CSRF token from the form and include it in the request headers
+        let headers = {
+          'Content-Type': 'application/json'
+        };
+
+        fetch('/me/get_graph_data?' + new URLSearchParams(filters), {
+          method: 'GET',
+          headers: headers
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Update the data on the page without refreshing
+            console.log('Data received building chart:', data);
+            buildChart(data)
+        })
+        .catch(error => {
+          console.error('Error fetching data:', error);
+        });
+    }
+
+  function buildChart(data) {
+        data = data.data
+
+        const questionList = Object.keys(data);
+
+        const selectionList = Object.values(data).map(item => item.selections);
+        const bgColorList = Object.values(data).map(item => {
+            if(item.correct == "false"){
+                return "rgba(255, 99, 132, 0.2)"
+            } else {
+                return "rgba(75, 192, 192, 0.2)"
+            }
+        });
+
+
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: questionList,
+
+                datasets: [{
+                    label: '# of Answers',
+                    data: selectionList,
+                    backgroundColor: bgColorList,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                ticks: {
+                  precision:0
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Custom Chart Title'
+                    }
+                }
+
+            }
+        });
+  }
+
+
+</script>
