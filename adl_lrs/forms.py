@@ -37,11 +37,11 @@ class RegisterForm(forms.Form):
         widget=forms.PasswordInput(render_value=False)
     )
 
-    captcha = ReCaptchaField(
-        public_key=settings.RECAPTCHA_PUBLIC_KEY,
-        private_key=settings.RECAPTCHA_PRIVATE_KEY,
-        widget=ReCaptchaV2Checkbox
-    )
+    # captcha = ReCaptchaField(
+    #     public_key=settings.RECAPTCHA_PUBLIC_KEY,
+    #     private_key=settings.RECAPTCHA_PRIVATE_KEY,
+    #     widget=ReCaptchaV2Checkbox
+    # )
 
     def clean(self):
         cleaned = super(RegisterForm, self).clean()
